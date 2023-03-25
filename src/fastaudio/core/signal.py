@@ -14,6 +14,9 @@ from fastcore.utils import ifnone
 from IPython.display import Audio, display
 from librosa.display import waveplot
 from os import path
+from tqdm.auto import tqdm
+import pandas as pd
+
 
 audio_extensions = tuple(
     str.lower(k) for k, v in mimetypes.types_map.items() if v.startswith("audio/")
@@ -25,6 +28,24 @@ def get_audio_files(path, recurse=True, folders=None):
     return get_files(
         path, extensions=audio_extensions, recurse=recurse, folders=folders
     )
+
+
+def get_audio_files_metadata(filenames, parent=Path('./')):
+    metadata = []
+    for file in tqdm(filenames, 'Extracting audio metadata'):
+        info = torchaudio.info(parent/file)
+        metadata.append({
+            'filename': file,
+            'sample_rate': info.sample_rate,
+            'num_frames': info.num_frames,
+            'num_channels': info.num_channels,
+            'bits_per_sample': info.bits_per_sample,
+            'encoding': info.encoding
+        })
+    metadata_df = pd.DataFrame(metadata).set_index('filename')
+    metadata_df['seconds'] = metadata_df.num_frames / metadata_df.sample_rate
+
+    return metadata_df
 
 
 def AudioGetter(suf="", recurse=True, folders=None):
