@@ -12,6 +12,7 @@ from torchaudio import save as save_audio
 from ..augment.preprocess import Resample
 from ..augment.signal import DownmixMono, ResizeSignal
 from .signal import AudioTensor, get_audio_files
+from tqdm.auto import tqdm
 
 
 def audio_item_tfms(sample_rate=16000, force_mono=True, crop_signal_to=None):
@@ -36,7 +37,10 @@ class PreprocessAudio:
 
     @delegates(audio_item_tfms)
     def __init__(self, **kwargs):
-        self.tfms = Pipeline(audio_item_tfms(**kwargs))
+        if 'pipeline' in kwargs:
+            self.tfms = kwargs['pipeline']
+        else:
+            self.tfms = Pipeline(audio_item_tfms(**kwargs))
 
     def __call__(self, x):
         audio = AudioTensor.create(x)
@@ -44,17 +48,19 @@ class PreprocessAudio:
 
 
 @delegates(PreprocessAudio, keep=True)
-def preprocess_audio_folder(path, folders=None, output_dir=None, **kwargs):
+def preprocess_audio_folder(path, folders=None, output_dir=None, max_files=None, **kwargs):
     "Preprocess audio files in `path` in parallel using `n_workers`"
     path = Path(path)
     fnames = get_audio_files(path, recurse=True, folders=folders)
+    if max_files is not None:
+        fnames = fnames[:max_files]
     output_dir = Path(ifnone(output_dir, path.parent / f"{path.name}_cached"))
     output_dir.mkdir(exist_ok=True)
-
     pp = PreprocessAudio(**kwargs)
 
-    for i, fil in enumerate(fnames):
+    for i, fil in enumerate(tqdm(fnames)):
         out = output_dir / fnames[i].relative_to(path)
+        out.parent.mkdir(exist_ok=True)
         aud = pp(fil)
         save_audio(str(out), aud, aud.sr)
     return output_dir
